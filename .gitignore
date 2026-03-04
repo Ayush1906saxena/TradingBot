@@ -1,0 +1,61 @@
+# --- Secrets & credentials ---
+.env
+.claude/
+*.pem
+*.key
+credentials.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+
+# --- Database ---
+*.db
+*.db-journal
+*.db-wal
+*.sqlite3
+
+# --- Cached data ---
+data/instruments_cache.json
+
+# --- Logs & backtest reports ---
+logs/*.log
+logs/*.html
+logs/*.png
+errors.log
+system.log
+trades.log
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# --- macOS ---
+.DS_Store
+Thumbs.db
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- pytest ---
+.pytest_cache/
+htmlcov/
+.coverage
+
+# --- mypy ---
+.mypy_cache/

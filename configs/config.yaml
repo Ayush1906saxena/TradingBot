@@ -1,0 +1,281 @@
+# ============================================================
+# ALGO TRADING SYSTEM — CONFIGURATION
+# ============================================================
+# INSTRUCTIONS FOR USER:
+#   1. Fill in the "broker" section with your Dhan API credentials
+#   2. Fill in the "telegram" section (optional but recommended)
+#   3. Everything else has sensible defaults — don't change unless you know why
+# ============================================================
+
+# --- MODE ---
+# Options: "backtest", "paper", "live"
+# Start with "backtest", then "paper" for 2+ months, then "live"
+mode: "backtest"
+
+# --- BROKER ---
+broker:
+  name: "dhan"                              # "dhan" or "zerodha"
+
+  dhan:
+    client_id: ""                           # USER: paste your Dhan Client ID here
+    access_token: ""                        # USER: paste your Dhan Access Token here
+    # How to get these:
+    #   1. Open a Dhan account at dhan.co
+    #   2. Go to https://dhanhq.co → Login → My Profile → Generate Access Token
+    #   3. Client ID is your Dhan user ID (visible on the dashboard)
+    #   4. Access Token is generated from the API section
+    # The access token is valid for one trading day. The system auto-refreshes it.
+
+  zerodha:
+    api_key: ""                             # Only needed if broker.name is "zerodha"
+    api_secret: ""
+    totp_secret: ""                         # Your TOTP secret for automated login
+    # How to get these:
+    #   1. Go to https://developers.kite.trade → Sign up
+    #   2. Choose "Kite Connect" plan (₹500/month for data + trading)
+    #   3. Create an app → copy API Key and API Secret
+    #   4. For TOTP: enable 2FA in Kite, use the TOTP secret from setup
+
+# --- CAPITAL ---
+capital:
+  total: 100000                             # Total trading capital in ₹
+  max_risk_per_trade_pct: 2.0               # Max 2% of capital risked per trade
+  max_daily_loss_pct: 5.0                   # Halt trading if daily loss exceeds 5%
+  max_capital_deployed_pct: 80.0            # Always keep 20% as cash buffer
+  max_per_stock_pct: 20.0                   # Max 20% of capital in any single stock
+  max_open_positions: 5                     # Max simultaneous open positions
+  consecutive_loss_kill_switch: 5           # Halt after 5 consecutive losing trades
+
+# --- MARKET HOURS ---
+market:
+  exchange: "NSE"
+  timezone: "Asia/Kolkata"
+  trading_start: "09:20"                    # Skip first 5 min (opening auction volatility)
+  trading_end: "15:15"                      # Stop new signals 15 min before close
+  force_exit_time: "15:20"                  # Close all intraday positions by this time
+  data_start: "09:15"                       # Start WebSocket at market open
+  data_end: "15:35"                         # Keep WebSocket open past close for settlement ticks
+
+# --- STRATEGIES ---
+strategies:
+  sma_crossover:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"                      # Candle interval: "1min", "5min", "15min", "1h", "1d"
+    short_window: 9                         # Fast SMA period
+    long_window: 21                         # Slow SMA period
+    stop_loss_pct: 1.5                      # Stop-loss: 1.5% below entry
+    target_pct: 3.0                         # Target: 3% above entry (2:1 reward:risk)
+    capital_allocation: 25000               # Max ₹ this strategy can deploy
+    trade_type: "intraday"                  # "intraday" (exit same day) or "positional" (hold overnight)
+
+  rsi_reversal:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    rsi_period: 14
+    oversold_threshold: 30                  # Buy when RSI drops below this
+    overbought_threshold: 70                # Sell when RSI rises above this
+    exit_at_mean: true                      # Exit when RSI returns to 50
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  ema_rsi_volume:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    ema_short: 9
+    ema_long: 21
+    rsi_period: 14
+    rsi_buy_threshold: 55                   # Only buy if RSI > 55
+    rsi_sell_threshold: 45                  # Only sell if RSI < 45
+    volume_multiplier: 1.5                  # Volume must be 1.5x 20-period average
+    stop_loss_pct: 1.5
+    trailing_stop_enabled: true
+    trailing_breakeven_at_pct: 2.0          # Move stop to breakeven when profit hits 2%
+    trailing_activate_at_pct: 3.0           # Start trailing when profit hits 3%
+    trailing_distance_pct: 1.5              # Trail at 1.5% below highest price
+    capital_allocation: 50000
+    trade_type: "intraday"
+
+  supertrend:
+    enabled: false                          # Enable after testing the above three
+    symbols: ["RELIANCE", "TCS", "HDFCBANK"]
+    timeframe: "15min"
+    atr_period: 10                          # Average True Range lookback
+    multiplier: 3.0                         # Supertrend multiplier
+    capital_allocation: 50000
+    trade_type: "intraday"
+
+  # --- NEW STRATEGIES (10 globally popular, empirically validated models) ---
+
+  macd_crossover:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    fast_period: 12
+    slow_period: 26
+    signal_period: 9
+    ema_filter_period: 200                  # Only trade in direction of 200 EMA trend
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  bollinger_bands:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    bb_period: 20
+    bb_std: 2.0
+    stop_loss_pct: 2.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  vwap_strategy:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "5min"                       # VWAP works best on shorter timeframes
+    volume_multiplier: 1.5
+    stop_loss_pct: 1.5
+    target_pct: 3.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  donchian_channel:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    entry_period: 20                        # Classic Turtle Trading 20-period breakout
+    exit_period: 10                         # 10-period exit channel
+    atr_period: 14
+    atr_sl_multiplier: 2.0
+    stop_loss_pct: 2.5
+    target_pct: 5.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  stochastic_oscillator:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    k_period: 14
+    d_period: 3
+    smooth_k: 3
+    oversold_threshold: 20
+    overbought_threshold: 80
+    trend_filter_period: 50
+    stop_loss_pct: 1.5
+    target_pct: 3.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  adx_trend:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    adx_period: 14
+    adx_threshold: 25                       # Only trade when trend is strong
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  ichimoku_cloud:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    tenkan_period: 9
+    kijun_period: 26
+    senkou_b_period: 52
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  mean_reversion_zscore:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    lookback_period: 20
+    entry_z_score: 2.0                      # Enter when Z-score exceeds ±2
+    exit_z_score: 0.0                       # Exit when price reverts to mean
+    stop_loss_pct: 3.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  momentum_roc:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    roc_period: 12
+    roc_buy_threshold: 3.0                  # ROC > 3% for buy signal
+    roc_sell_threshold: -3.0                # ROC < -3% for sell signal
+    ema_filter_period: 50
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  parabolic_sar:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    af_start: 0.02                          # Acceleration factor start
+    af_increment: 0.02                      # AF increment per step
+    af_max: 0.2                             # Maximum acceleration factor
+    adx_filter_period: 14                   # ADX filter to avoid ranging markets
+    adx_min: 20
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+# --- PAPER TRADING (DUMMY MONEY) ---
+paper_trading:
+  initial_virtual_cash: 100000              # Starting dummy money in ₹
+  simulate_slippage: true                   # Add realistic slippage to virtual fills
+  slippage_pct: 0.05                        # 0.05% slippage per trade
+  simulate_fees: true                       # Deduct realistic brokerage/STT/GST from virtual wallet
+  simulate_partial_fills: false             # Keep false for simplicity (always fill full quantity)
+  reset_on_restart: false                   # If true, reset virtual wallet to initial_cash on every restart
+                                            # If false, resume from last saved state (default)
+
+# --- BACKTEST SETTINGS ---
+backtest:
+  start_date: "2024-01-01"                 # Backtest from this date
+  end_date: "2025-12-31"                   # Backtest to this date
+  initial_capital: 100000                   # Starting capital for backtest
+  slippage_pct: 0.05                        # 0.05% slippage on each trade
+  commission_per_order: 20                  # ₹20 flat per order (Zerodha/Dhan pricing)
+  stt_delivery_pct: 0.025                   # STT on sell side (delivery)
+  stt_intraday_pct: 0.01                    # STT on sell side (intraday)
+  gst_pct: 18.0                             # GST on brokerage
+  stamp_duty_buy_pct: 0.003                 # Stamp duty on buy side
+  walk_forward_splits: 5                    # Number of train/test splits
+  walk_forward_train_days: 250              # Training window (days)
+  walk_forward_test_days: 50               # Testing window (days)
+
+# --- TELEGRAM ALERTS ---
+telegram:
+  enabled: false                            # Set to true after setting up bot
+  bot_token: ""                             # USER: paste your Telegram bot token
+  chat_id: ""                               # USER: paste your Telegram chat ID
+  # How to set up:
+  #   1. Open Telegram, search @BotFather
+  #   2. Send /newbot, follow prompts, copy the bot token
+  #   3. Search @userinfobot, send /start, copy the "Id" number (this is chat_id)
+  #   4. Start a conversation with your new bot (search it by name, click Start)
+
+# --- DASHBOARD ---
+dashboard:
+  port: 8501                                # Streamlit runs on this port
+  auto_open_browser: true                  # Opens browser automatically on local Mac
+
+# --- LOGGING ---
+logging:
+  level: "INFO"                             # DEBUG, INFO, WARNING, ERROR
+  max_file_size_mb: 10                      # Rotate logs at this size
+  backup_count: 5                           # Keep this many old log files
