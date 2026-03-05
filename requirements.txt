@@ -16,3 +16,5 @@ websocket-client>=1.8.0
 pytz>=2024.2
 pytest>=8.3.4
 pyotp>=2.9.0
+scikit-learn>=1.4.0
+statsmodels>=0.14.0

@@ -24,6 +24,20 @@ class BaseStrategy(ABC):
         """
         pass
 
+    @property
+    def is_multi_symbol(self) -> bool:
+        """Override and return True for strategies that operate across multiple symbols."""
+        return False
+
+    def generate_signal_multi(self, dfs: dict[str, pd.DataFrame]) -> list[dict]:
+        """
+        For multi-symbol strategies: receive all symbol DataFrames, return list of signals.
+        Override in multi-symbol strategies. Default raises NotImplementedError.
+        """
+        raise NotImplementedError(
+            f"{self.name} does not implement generate_signal_multi"
+        )
+
     def should_exit(self, position: dict, current_price: float, df: pd.DataFrame) -> dict | None:
         """Check SL/target. Override for trailing stops. Return exit signal or None."""
         sl = position["stop_loss"]

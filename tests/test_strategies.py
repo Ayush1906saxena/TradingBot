@@ -58,25 +58,6 @@ def make_rsi_config():
     }
 
 
-def make_ema_rsi_volume_config():
-    return {
-        "symbols": ["TEST"],
-        "timeframe": "15min",
-        "ema_short": 9,
-        "ema_long": 21,
-        "rsi_period": 14,
-        "rsi_buy_threshold": 55,
-        "rsi_sell_threshold": 45,
-        "volume_multiplier": 1.5,
-        "stop_loss_pct": 1.5,
-        "trailing_stop_enabled": True,
-        "trailing_breakeven_at_pct": 2.0,
-        "trailing_activate_at_pct": 3.0,
-        "trailing_distance_pct": 1.5,
-        "capital_allocation": 50000,
-        "trade_type": "intraday",
-    }
-
 
 class TestSMACrossover:
     def test_compute_indicators(self):
@@ -190,60 +171,175 @@ class TestRSIReversal:
             assert signal["stop_loss"] > 0
 
 
-class TestEMARSIVolume:
+class TestKeltnerSqueeze:
     def test_compute_indicators(self):
-        from strategies.ema_rsi_volume import EMARSIVolume
-        strategy = EMARSIVolume(make_ema_rsi_volume_config())
+        from strategies.keltner_squeeze import KeltnerSqueeze
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = KeltnerSqueeze(cfg)
         df = make_ohlcv(100)
         result = strategy.compute_indicators(df)
-        assert "EMA_9" in result.columns
-        assert "EMA_21" in result.columns
+        assert "KC_MID" in result.columns
+        assert "KC_UPPER" in result.columns
+
+    def test_no_signal_insufficient_data(self):
+        from strategies.keltner_squeeze import KeltnerSqueeze
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = KeltnerSqueeze(cfg)
+        df = make_ohlcv(10)
+        assert strategy.generate_signal(df, "TEST") is None
+
+    def test_signal_or_none(self):
+        from strategies.keltner_squeeze import KeltnerSqueeze
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = KeltnerSqueeze(cfg)
+        df = make_ohlcv(200)
+        signal = strategy.generate_signal(df, "TEST")
+        if signal:
+            assert signal["action"] in ("BUY", "SELL")
+            assert signal["strategy"] == "keltner_squeeze"
+
+
+class TestRSIDivergence:
+    def test_compute_indicators(self):
+        from strategies.rsi_divergence import RSIDivergence
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "rsi_period": 14,
+               "lookback": 20, "swing_window": 5, "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = RSIDivergence(cfg)
+        df = make_ohlcv(100)
+        result = strategy.compute_indicators(df)
         assert "RSI_14" in result.columns
-        assert "volume_sma_20" in result.columns
-        assert "volume_spike" in result.columns
 
-    def test_trailing_stop_phase1(self):
-        from strategies.ema_rsi_volume import EMARSIVolume
-        strategy = EMARSIVolume(make_ema_rsi_volume_config())
-        position = {
-            "symbol": "TEST", "strategy": "ema_rsi_volume",
-            "side": "LONG", "entry_price": 2500.0,
-            "stop_loss": 2462.5, "highest_since_entry": 2500.0
-        }
+    def test_no_signal_insufficient_data(self):
+        from strategies.rsi_divergence import RSIDivergence
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "rsi_period": 14,
+               "lookback": 20, "swing_window": 5, "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = RSIDivergence(cfg)
+        df = make_ohlcv(10)
+        assert strategy.generate_signal(df, "TEST") is None
+
+
+class TestVolatilityBreakout:
+    def test_compute_indicators(self):
+        from strategies.volatility_breakout import VolatilityBreakout
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "k_factor": 0.5,
+               "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = VolatilityBreakout(cfg)
         df = make_ohlcv(50)
-        # Price at entry — no exit
-        exit_sig = strategy.should_exit(position, 2500.0, df)
-        assert exit_sig is None
+        result = strategy.compute_indicators(df)
+        assert "upper_trigger" in result.columns
+        assert "lower_trigger" in result.columns
 
-    def test_trailing_stop_stoploss_hit(self):
-        from strategies.ema_rsi_volume import EMARSIVolume
-        strategy = EMARSIVolume(make_ema_rsi_volume_config())
-        position = {
-            "symbol": "TEST", "strategy": "ema_rsi_volume",
-            "side": "LONG", "entry_price": 2500.0,
-            "stop_loss": 2462.5, "highest_since_entry": 2500.0
-        }
+    def test_signal_or_none(self):
+        from strategies.volatility_breakout import VolatilityBreakout
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "k_factor": 0.5,
+               "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = VolatilityBreakout(cfg)
+        df = make_ohlcv(100)
+        signal = strategy.generate_signal(df, "TEST")
+        if signal:
+            assert signal["action"] in ("BUY", "SELL")
+            assert signal["strategy"] == "volatility_breakout"
+
+
+class TestOpeningRangeBreakout:
+    def test_compute_indicators(self):
+        from strategies.opening_range_breakout import OpeningRangeBreakout
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "atr_period": 14,
+               "atr_multiplier": 0.3, "stop_loss_pct": 1.5, "target_pct": 3.0}
+        strategy = OpeningRangeBreakout(cfg)
         df = make_ohlcv(50)
-        # Price below stop loss
-        exit_sig = strategy.should_exit(position, 2460.0, df)
-        assert exit_sig is not None
-        assert exit_sig["reason"] == "STOPLOSS"
+        result = strategy.compute_indicators(df)
+        assert "ATR" in result.columns
+        assert "OR_UPPER" in result.columns
 
-    def test_trailing_stop_activation(self):
-        from strategies.ema_rsi_volume import EMARSIVolume
-        strategy = EMARSIVolume(make_ema_rsi_volume_config())
-        position = {
-            "symbol": "TEST", "strategy": "ema_rsi_volume",
-            "side": "LONG", "entry_price": 2500.0,
-            "stop_loss": 2462.5, "highest_since_entry": 2600.0  # profit > 3%
-        }
+    def test_no_signal_insufficient_data(self):
+        from strategies.opening_range_breakout import OpeningRangeBreakout
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "atr_period": 14,
+               "atr_multiplier": 0.3, "stop_loss_pct": 1.5, "target_pct": 3.0}
+        strategy = OpeningRangeBreakout(cfg)
+        df = make_ohlcv(5)
+        assert strategy.generate_signal(df, "TEST") is None
+
+
+class TestMultiTimeframe:
+    def test_compute_indicators(self):
+        from strategies.multi_timeframe import MultiTimeframe
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "trend_sma_period": 50,
+               "ema_fast": 9, "ema_slow": 21, "rsi_period": 14,
+               "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = MultiTimeframe(cfg)
+        df = make_ohlcv(100)
+        result = strategy.compute_indicators(df)
+        assert "SMA_TREND" in result.columns
+        assert "EMA_FAST" in result.columns
+        assert "RSI" in result.columns
+
+    def test_no_signal_insufficient_data(self):
+        from strategies.multi_timeframe import MultiTimeframe
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "trend_sma_period": 50,
+               "ema_fast": 9, "ema_slow": 21, "rsi_period": 14,
+               "stop_loss_pct": 2.0, "target_pct": 4.0}
+        strategy = MultiTimeframe(cfg)
+        df = make_ohlcv(20)
+        assert strategy.generate_signal(df, "TEST") is None
+
+
+class TestMLEnsemble:
+    def test_compute_indicators(self):
+        from strategies.ml_ensemble import MLEnsemble
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "train_window": 200,
+               "retrain_every": 20, "stop_loss_pct": 2.5, "target_pct": 5.0}
+        strategy = MLEnsemble(cfg)
+        df = make_ohlcv(100)
+        result = strategy.compute_indicators(df)
+        assert "RSI_7" in result.columns
+        assert "RSI_14" in result.columns
+        assert "RET_1" in result.columns
+        assert "VOL_RATIO" in result.columns
+
+    def test_no_signal_insufficient_data(self):
+        from strategies.ml_ensemble import MLEnsemble
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "train_window": 200,
+               "retrain_every": 20, "stop_loss_pct": 2.5, "target_pct": 5.0}
+        strategy = MLEnsemble(cfg)
         df = make_ohlcv(50)
-        # Trail stop = 2600 * (1 - 1.5%) = 2561
-        # Price at 2570 — no exit
-        exit_sig = strategy.should_exit(position, 2570.0, df)
-        assert exit_sig is None
+        assert strategy.generate_signal(df, "TEST") is None
 
-        # Price below trail stop
-        exit_sig = strategy.should_exit(position, 2555.0, df)
-        assert exit_sig is not None
-        assert exit_sig["reason"] == "TRAILING_STOP"
+    def test_signal_with_enough_data(self):
+        from strategies.ml_ensemble import MLEnsemble
+        cfg = {"symbols": ["TEST"], "timeframe": "15min", "train_window": 100,
+               "retrain_every": 20, "forward_days": 5, "buy_threshold": 0.6,
+               "sell_threshold": 0.4, "stop_loss_pct": 2.5, "target_pct": 5.0}
+        strategy = MLEnsemble(cfg)
+        df = make_ohlcv(250, trend="up")
+        signal = strategy.generate_signal(df, "TEST")
+        if signal:
+            assert signal["action"] in ("BUY", "SELL")
+            assert signal["strategy"] == "ml_ensemble"
+
+
+class TestPairsTrading:
+    def test_is_multi_symbol(self):
+        from strategies.pairs_trading import PairsTrading
+        cfg = {"symbols": ["TEST_A", "TEST_B"], "timeframe": "15min",
+               "lookback": 60, "stop_loss_pct": 3.0, "target_pct": 4.0}
+        strategy = PairsTrading(cfg)
+        assert strategy.is_multi_symbol is True
+
+    def test_single_symbol_generate_signal_returns_none(self):
+        from strategies.pairs_trading import PairsTrading
+        cfg = {"symbols": ["TEST_A", "TEST_B"], "timeframe": "15min",
+               "lookback": 60, "stop_loss_pct": 3.0, "target_pct": 4.0}
+        strategy = PairsTrading(cfg)
+        df = make_ohlcv(100)
+        assert strategy.generate_signal(df, "TEST_A") is None
+
+    def test_generate_signal_multi_returns_list(self):
+        from strategies.pairs_trading import PairsTrading
+        cfg = {"symbols": ["TEST_A", "TEST_B"], "timeframe": "15min",
+               "lookback": 60, "coint_pvalue": 0.99,  # relaxed for test
+               "stop_loss_pct": 3.0, "target_pct": 4.0}
+        strategy = PairsTrading(cfg)
+        dfs = {"TEST_A": make_ohlcv(100, "up"), "TEST_B": make_ohlcv(100, "up")}
+        signals = strategy.generate_signal_multi(dfs)
+        assert isinstance(signals, list)

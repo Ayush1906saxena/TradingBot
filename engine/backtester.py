@@ -26,34 +26,34 @@ class Backtester:
     def _load_strategies(self, strategy_name: str = None) -> list:
         from strategies.sma_crossover import SMACrossover
         from strategies.rsi_reversal import RSIReversal
-        from strategies.ema_rsi_volume import EMARSIVolume
         from strategies.supertrend import SupertrendStrategy
-        from strategies.macd_crossover import MACDCrossover
         from strategies.bollinger_bands import BollingerBands
-        from strategies.vwap_strategy import VWAPStrategy
-        from strategies.donchian_channel import DonchianChannel
         from strategies.stochastic_oscillator import StochasticOscillator
-        from strategies.adx_trend import ADXTrend
-        from strategies.ichimoku_cloud import IchimokuCloud
         from strategies.mean_reversion_zscore import MeanReversionZScore
-        from strategies.momentum_roc import MomentumROC
         from strategies.parabolic_sar import ParabolicSAR
+        from strategies.keltner_squeeze import KeltnerSqueeze
+        from strategies.rsi_divergence import RSIDivergence
+        from strategies.volatility_breakout import VolatilityBreakout
+        from strategies.opening_range_breakout import OpeningRangeBreakout
+        from strategies.multi_timeframe import MultiTimeframe
+        from strategies.ml_ensemble import MLEnsemble
+        from strategies.pairs_trading import PairsTrading
 
         strategy_map = {
             "sma_crossover": SMACrossover,
             "rsi_reversal": RSIReversal,
-            "ema_rsi_volume": EMARSIVolume,
             "supertrend": SupertrendStrategy,
-            "macd_crossover": MACDCrossover,
             "bollinger_bands": BollingerBands,
-            "vwap_strategy": VWAPStrategy,
-            "donchian_channel": DonchianChannel,
             "stochastic_oscillator": StochasticOscillator,
-            "adx_trend": ADXTrend,
-            "ichimoku_cloud": IchimokuCloud,
             "mean_reversion_zscore": MeanReversionZScore,
-            "momentum_roc": MomentumROC,
             "parabolic_sar": ParabolicSAR,
+            "keltner_squeeze": KeltnerSqueeze,
+            "rsi_divergence": RSIDivergence,
+            "volatility_breakout": VolatilityBreakout,
+            "opening_range_breakout": OpeningRangeBreakout,
+            "multi_timeframe": MultiTimeframe,
+            "ml_ensemble": MLEnsemble,
+            "pairs_trading": PairsTrading,
         }
 
         strategies = []
@@ -84,14 +84,26 @@ class Backtester:
 
             capital = initial_capital
 
-            for symbol in strategy.symbols:
-                df = self._get_ohlcv(strategy, symbol, start, end)
-                if df is None or len(df) < 50:
-                    logger.warning(f"Insufficient data for {symbol} — skipping")
-                    continue
+            if strategy.is_multi_symbol:
+                # Multi-symbol path: load all symbols, simulate together
+                dfs = {}
+                for symbol in strategy.symbols:
+                    df = self._get_ohlcv(strategy, symbol, start, end)
+                    if df is not None and len(df) >= 50:
+                        dfs[symbol] = df
+                    else:
+                        logger.warning(f"Insufficient data for {symbol} — skipping")
+                if dfs:
+                    trades = self._simulate_multi_symbol(strategy, dfs, capital)
+            else:
+                for symbol in strategy.symbols:
+                    df = self._get_ohlcv(strategy, symbol, start, end)
+                    if df is None or len(df) < 50:
+                        logger.warning(f"Insufficient data for {symbol} — skipping")
+                        continue
 
-                symbol_trades = self._simulate_symbol(strategy, symbol, df, capital / len(strategy.symbols))
-                trades.extend(symbol_trades)
+                    symbol_trades = self._simulate_symbol(strategy, symbol, df, capital / len(strategy.symbols))
+                    trades.extend(symbol_trades)
 
             metrics = self.calculate_metrics(trades, initial_capital)
             equity_curve = self._build_equity_curve(trades, initial_capital)
@@ -217,6 +229,110 @@ class Backtester:
                 "pnl": pnl, "fees": fees["total"], "reason": "END_OF_DATA",
                 "timestamp": str(df.iloc[-1].get("timestamp", len(df))),
             })
+
+        return trades
+
+    def _simulate_multi_symbol(self, strategy, dfs: dict[str, pd.DataFrame],
+                                total_capital: float) -> list:
+        """Simulate a multi-symbol strategy by iterating aligned dates."""
+        trades = []
+        open_positions = {}  # symbol -> position dict
+        slippage_pct = float(self.bt_config.get("slippage_pct", 0.05))
+        allocated_per_symbol = total_capital / max(len(dfs), 1)
+        warmup = 60
+
+        # Collect all unique timestamps and sort
+        all_timestamps = set()
+        for df in dfs.values():
+            all_timestamps.update(df["timestamp"].tolist())
+        sorted_dates = sorted(all_timestamps)
+
+        for date in sorted_dates[warmup:]:
+            # Build sub-DataFrames up to this date
+            sub_dfs = {}
+            for symbol, df in dfs.items():
+                mask = df["timestamp"] <= date
+                sub = df[mask]
+                if len(sub) >= warmup:
+                    sub_dfs[symbol] = sub.copy()
+
+            if not sub_dfs:
+                continue
+
+            # Check exits first
+            for symbol in list(open_positions.keys()):
+                pos = open_positions[symbol]
+                if symbol not in sub_dfs:
+                    continue
+                current_price = float(sub_dfs[symbol].iloc[-1]["close"])
+
+                if pos["side"] == "LONG":
+                    pos["highest_since_entry"] = max(
+                        pos.get("highest_since_entry", pos["entry_price"]), current_price)
+                else:
+                    pos["highest_since_entry"] = min(
+                        pos.get("highest_since_entry", pos["entry_price"]), current_price)
+
+                exit_signal = strategy.should_exit(pos, current_price, sub_dfs[symbol])
+                if exit_signal:
+                    if exit_signal["action"] == "BUY":
+                        fill = current_price * (1 + slippage_pct / 100)
+                    else:
+                        fill = current_price * (1 - slippage_pct / 100)
+                    fees = calculate_fees(fill, pos["quantity"], exit_signal["action"], "intraday")
+                    pnl = (fill - pos["entry_price"]) * pos["quantity"]
+                    if pos["side"] == "SHORT":
+                        pnl = (pos["entry_price"] - fill) * pos["quantity"]
+                    pnl -= fees["total"]
+
+                    trades.append({
+                        "symbol": symbol, "strategy": strategy.name,
+                        "side": exit_signal["action"], "quantity": pos["quantity"],
+                        "entry_price": pos["entry_price"], "exit_price": fill,
+                        "pnl": pnl, "fees": fees["total"],
+                        "reason": exit_signal["reason"], "timestamp": str(date),
+                    })
+                    del open_positions[symbol]
+
+            # Generate new entry signals
+            signals = strategy.generate_signal_multi(sub_dfs)
+            for signal in signals:
+                sym = signal["symbol"]
+                if sym in open_positions:
+                    continue
+
+                fill = signal["price"] * (1 + slippage_pct / 100) if signal["action"] == "BUY" \
+                    else signal["price"] * (1 - slippage_pct / 100)
+
+                sl_val = signal.get("stop_loss", fill * 0.98)
+                qty = max(1, int((allocated_per_symbol * 0.02) / max(abs(fill - sl_val), 0.01)))
+                qty = min(qty, int(allocated_per_symbol * 0.20 / max(fill, 0.01)))
+                qty = max(1, qty)
+
+                open_positions[sym] = {
+                    "symbol": sym, "strategy": strategy.name,
+                    "side": "LONG" if signal["action"] == "BUY" else "SHORT",
+                    "quantity": qty, "entry_price": fill,
+                    "stop_loss": sl_val, "target": signal.get("target"),
+                    "highest_since_entry": fill,
+                }
+
+        # Force close remaining
+        for symbol, pos in open_positions.items():
+            if symbol in dfs:
+                fill = float(dfs[symbol].iloc[-1]["close"])
+                fees = calculate_fees(fill, pos["quantity"], "SELL", "intraday")
+                pnl = (fill - pos["entry_price"]) * pos["quantity"]
+                if pos["side"] == "SHORT":
+                    pnl = (pos["entry_price"] - fill) * pos["quantity"]
+                pnl -= fees["total"]
+                trades.append({
+                    "symbol": symbol, "strategy": strategy.name,
+                    "side": "SELL", "quantity": pos["quantity"],
+                    "entry_price": pos["entry_price"], "exit_price": fill,
+                    "pnl": pnl, "fees": fees["total"], "reason": "END_OF_DATA",
+                    "timestamp": str(dfs[symbol].iloc[-1].get("timestamp", "")),
+                })
 
         return trades
 

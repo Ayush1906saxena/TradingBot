@@ -105,34 +105,34 @@ class TradingEngine:
     def _init_strategies(self):
         from strategies.sma_crossover import SMACrossover
         from strategies.rsi_reversal import RSIReversal
-        from strategies.ema_rsi_volume import EMARSIVolume
         from strategies.supertrend import SupertrendStrategy
-        from strategies.macd_crossover import MACDCrossover
         from strategies.bollinger_bands import BollingerBands
-        from strategies.vwap_strategy import VWAPStrategy
-        from strategies.donchian_channel import DonchianChannel
         from strategies.stochastic_oscillator import StochasticOscillator
-        from strategies.adx_trend import ADXTrend
-        from strategies.ichimoku_cloud import IchimokuCloud
         from strategies.mean_reversion_zscore import MeanReversionZScore
-        from strategies.momentum_roc import MomentumROC
         from strategies.parabolic_sar import ParabolicSAR
+        from strategies.keltner_squeeze import KeltnerSqueeze
+        from strategies.rsi_divergence import RSIDivergence
+        from strategies.volatility_breakout import VolatilityBreakout
+        from strategies.opening_range_breakout import OpeningRangeBreakout
+        from strategies.multi_timeframe import MultiTimeframe
+        from strategies.ml_ensemble import MLEnsemble
+        from strategies.pairs_trading import PairsTrading
 
         strategy_map = {
             "sma_crossover": SMACrossover,
             "rsi_reversal": RSIReversal,
-            "ema_rsi_volume": EMARSIVolume,
             "supertrend": SupertrendStrategy,
-            "macd_crossover": MACDCrossover,
             "bollinger_bands": BollingerBands,
-            "vwap_strategy": VWAPStrategy,
-            "donchian_channel": DonchianChannel,
             "stochastic_oscillator": StochasticOscillator,
-            "adx_trend": ADXTrend,
-            "ichimoku_cloud": IchimokuCloud,
             "mean_reversion_zscore": MeanReversionZScore,
-            "momentum_roc": MomentumROC,
             "parabolic_sar": ParabolicSAR,
+            "keltner_squeeze": KeltnerSqueeze,
+            "rsi_divergence": RSIDivergence,
+            "volatility_breakout": VolatilityBreakout,
+            "opening_range_breakout": OpeningRangeBreakout,
+            "multi_timeframe": MultiTimeframe,
+            "ml_ensemble": MLEnsemble,
+            "pairs_trading": PairsTrading,
         }
 
         for name, cls in strategy_map.items():
@@ -291,6 +291,11 @@ class TradingEngine:
                 if strategy.timeframe != timeframe:
                     continue
 
+                # Multi-symbol strategy path
+                if strategy.is_multi_symbol:
+                    self._handle_multi_symbol_strategy(strategy, timeframe)
+                    continue
+
                 # Get candle history
                 history = self._live_stream.get_candle_history(symbol, timeframe, 200)
                 if history.empty:
@@ -326,6 +331,46 @@ class TradingEngine:
 
         except Exception as e:
             logger.error(f"on_candle_close error for {symbol}/{timeframe}: {e}")
+
+    def _handle_multi_symbol_strategy(self, strategy, timeframe: str) -> None:
+        """Handle signal generation for multi-symbol strategies."""
+        # Collect histories for all symbols
+        dfs = {}
+        for sym in strategy.symbols:
+            history = self._live_stream.get_candle_history(sym, timeframe, 200)
+            if not history.empty:
+                dfs[sym] = history
+
+        if not dfs:
+            return
+
+        # Check exits for open positions
+        for sym in list(dfs.keys()):
+            position = self._get_open_position(sym, strategy.name)
+            if position:
+                current_price = self._live_stream.get_ltp(sym) or float(dfs[sym].iloc[-1]["close"])
+                exit_signal = strategy.should_exit(position, current_price, dfs[sym])
+                if exit_signal:
+                    self._order_mgr.close_position(position, exit_signal["reason"], current_price)
+                    if self.mode == "paper" and self.virtual_portfolio:
+                        open_positions = self._get_open_positions()
+                        self.virtual_portfolio.take_snapshot(
+                            open_positions, self._live_stream, "TRADE"
+                        )
+
+        # Generate new entry signals
+        if self._trading_enabled:
+            signals = strategy.generate_signal_multi(dfs)
+            for signal in signals:
+                sym = signal["symbol"]
+                position = self._get_open_position(sym, strategy.name)
+                if not position:
+                    result = self._order_mgr.process_signal(signal)
+                    if result and self.mode == "paper" and self.virtual_portfolio:
+                        open_positions = self._get_open_positions()
+                        self.virtual_portfolio.take_snapshot(
+                            open_positions, self._live_stream, "TRADE"
+                        )
 
     def _check_daily_loss(self) -> None:
         if self._risk_mgr.check_daily_loss():

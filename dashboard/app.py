@@ -221,7 +221,10 @@ elif page == "Trade History":
     with col2:
         filter_strategy = st.selectbox(
             "Strategy",
-            ["All", "sma_crossover", "rsi_reversal", "ema_rsi_volume", "supertrend"]
+            ["All", "sma_crossover", "rsi_reversal", "supertrend", "bollinger_bands",
+             "stochastic_oscillator", "mean_reversion_zscore", "parabolic_sar",
+             "keltner_squeeze", "rsi_divergence", "volatility_breakout",
+             "opening_range_breakout", "multi_timeframe", "ml_ensemble", "pairs_trading"]
         )
     with col3:
         filter_outcome = st.selectbox("Outcome", ["All", "Win", "Loss"])
@@ -339,7 +342,10 @@ elif page == "Backtest Runner":
     with col1:
         strategy_choice = st.selectbox(
             "Strategy",
-            ["All Enabled", "sma_crossover", "rsi_reversal", "ema_rsi_volume", "supertrend"]
+            ["All Enabled", "sma_crossover", "rsi_reversal", "supertrend", "bollinger_bands",
+             "stochastic_oscillator", "mean_reversion_zscore", "parabolic_sar",
+             "keltner_squeeze", "rsi_divergence", "volatility_breakout",
+             "opening_range_breakout", "multi_timeframe", "ml_ensemble", "pairs_trading"]
         )
         start_date = st.date_input("Start Date", value=date(2024, 1, 1))
     with col2:

@@ -82,24 +82,6 @@ strategies:
     capital_allocation: 25000
     trade_type: "intraday"
 
-  ema_rsi_volume:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "15min"
-    ema_short: 9
-    ema_long: 21
-    rsi_period: 14
-    rsi_buy_threshold: 55                   # Only buy if RSI > 55
-    rsi_sell_threshold: 45                  # Only sell if RSI < 45
-    volume_multiplier: 1.5                  # Volume must be 1.5x 20-period average
-    stop_loss_pct: 1.5
-    trailing_stop_enabled: true
-    trailing_breakeven_at_pct: 2.0          # Move stop to breakeven when profit hits 2%
-    trailing_activate_at_pct: 3.0           # Start trailing when profit hits 3%
-    trailing_distance_pct: 1.5              # Trail at 1.5% below highest price
-    capital_allocation: 50000
-    trade_type: "intraday"
-
   supertrend:
     enabled: false                          # Enable after testing the above three
     symbols: ["RELIANCE", "TCS", "HDFCBANK"]
@@ -109,20 +91,7 @@ strategies:
     capital_allocation: 50000
     trade_type: "intraday"
 
-  # --- NEW STRATEGIES (10 globally popular, empirically validated models) ---
-
-  macd_crossover:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "15min"
-    fast_period: 12
-    slow_period: 26
-    signal_period: 9
-    ema_filter_period: 200                  # Only trade in direction of 200 EMA trend
-    stop_loss_pct: 2.0
-    target_pct: 4.0
-    capital_allocation: 25000
-    trade_type: "intraday"
+  # --- KEPT STRATEGIES ---
 
   bollinger_bands:
     enabled: true
@@ -131,29 +100,6 @@ strategies:
     bb_period: 20
     bb_std: 2.0
     stop_loss_pct: 2.0
-    capital_allocation: 25000
-    trade_type: "intraday"
-
-  vwap_strategy:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "5min"                       # VWAP works best on shorter timeframes
-    volume_multiplier: 1.5
-    stop_loss_pct: 1.5
-    target_pct: 3.0
-    capital_allocation: 25000
-    trade_type: "intraday"
-
-  donchian_channel:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "15min"
-    entry_period: 20                        # Classic Turtle Trading 20-period breakout
-    exit_period: 10                         # 10-period exit channel
-    atr_period: 14
-    atr_sl_multiplier: 2.0
-    stop_loss_pct: 2.5
-    target_pct: 5.0
     capital_allocation: 25000
     trade_type: "intraday"
 
@@ -172,29 +118,6 @@ strategies:
     capital_allocation: 25000
     trade_type: "intraday"
 
-  adx_trend:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "15min"
-    adx_period: 14
-    adx_threshold: 25                       # Only trade when trend is strong
-    stop_loss_pct: 2.0
-    target_pct: 4.0
-    capital_allocation: 25000
-    trade_type: "intraday"
-
-  ichimoku_cloud:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "15min"
-    tenkan_period: 9
-    kijun_period: 26
-    senkou_b_period: 52
-    stop_loss_pct: 2.0
-    target_pct: 4.0
-    capital_allocation: 25000
-    trade_type: "intraday"
-
   mean_reversion_zscore:
     enabled: true
     symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
@@ -203,19 +126,6 @@ strategies:
     entry_z_score: 2.0                      # Enter when Z-score exceeds ±2
     exit_z_score: 0.0                       # Exit when price reverts to mean
     stop_loss_pct: 3.0
-    capital_allocation: 25000
-    trade_type: "intraday"
-
-  momentum_roc:
-    enabled: true
-    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
-    timeframe: "15min"
-    roc_period: 12
-    roc_buy_threshold: 3.0                  # ROC > 3% for buy signal
-    roc_sell_threshold: -3.0                # ROC < -3% for sell signal
-    ema_filter_period: 50
-    stop_loss_pct: 2.0
-    target_pct: 4.0
     capital_allocation: 25000
     trade_type: "intraday"
 
@@ -229,6 +139,100 @@ strategies:
     adx_filter_period: 14                   # ADX filter to avoid ranging markets
     adx_min: 20
     stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  # --- NEW STRATEGIES (advanced replacements for underperformers) ---
+
+  keltner_squeeze:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    bb_period: 20
+    bb_std: 2.0
+    kc_period: 20
+    kc_atr_mult: 1.5                        # Keltner Channel ATR multiplier
+    mom_period: 12                           # Momentum lookback
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  rsi_divergence:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    rsi_period: 14
+    lookback: 20                             # Window for finding divergences
+    swing_window: 5                          # Swing high/low detection window
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  volatility_breakout:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    k_factor: 0.5                            # Larry Williams k-factor
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  opening_range_breakout:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    atr_period: 14
+    atr_multiplier: 0.3                      # ORB range = open ± 0.3 × ATR
+    stop_loss_pct: 1.5
+    target_pct: 3.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  multi_timeframe:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    trend_sma_period: 50                     # Higher TF trend proxy
+    ema_fast: 9
+    ema_slow: 21
+    rsi_period: 14
+    rsi_buy_min: 40
+    rsi_buy_max: 70
+    rsi_sell_min: 30
+    rsi_sell_max: 60
+    stop_loss_pct: 2.0
+    target_pct: 4.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  ml_ensemble:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    train_window: 200                        # Rolling training window (bars)
+    retrain_every: 20                        # Retrain every N bars
+    forward_days: 5                          # Predict N-day forward return
+    buy_threshold: 0.6                       # BUY if probability > 0.6
+    sell_threshold: 0.4                      # SELL if probability < 0.4
+    stop_loss_pct: 2.5
+    target_pct: 5.0
+    capital_allocation: 25000
+    trade_type: "intraday"
+
+  pairs_trading:
+    enabled: true
+    symbols: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    timeframe: "15min"
+    lookback: 60                             # Cointegration lookback window
+    entry_z_score: 2.0                       # Enter when z-score exceeds ±2
+    exit_z_score: 0.5                        # Exit when z-score returns to ±0.5
+    coint_pvalue: 0.05                       # Cointegration p-value threshold
+    recalc_every: 20                         # Recalculate pairs every N bars
+    stop_loss_pct: 3.0
     target_pct: 4.0
     capital_allocation: 25000
     trade_type: "intraday"
